@@ -41,8 +41,24 @@ done
 
 # --- decide the target IP by host-key identity -----------------------------
 # Probe the LAN IP with a hard timeout; trust it only on an exact key match.
-probe_fp="$(ssh-keyscan -T "$PROBE_TIMEOUT" -p "$SSH_PORT" -t "$HOST_KEY_TYPE" "$LAN_IP" 2>/dev/null \
-            | ssh-keygen -lf - 2>/dev/null | awk '{print $2}')"
+tmpd="$(mktemp -d)" || { log "ERROR: mktemp failed"; exit 1; }
+case "$HOST_KEY_TYPE" in
+    rsa)   key_algs="rsa-sha2-512,rsa-sha2-256,ssh-rsa" ;;
+    ecdsa) key_algs="ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521" ;;
+    *)     key_algs="ssh-$HOST_KEY_TYPE" ;;
+esac
+ssh -F /dev/null -p "$SSH_PORT" -o BatchMode=yes -o ConnectTimeout="$PROBE_TIMEOUT" \
+    -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$tmpd/kh" \
+    -o HostKeyAlgorithms="$key_algs" -o PreferredAuthentications=none \
+    "probe@$LAN_IP" exit > /dev/null 2> "$tmpd/err" &
+ssh_pid=$!
+( sleep "$PROBE_TIMEOUT"; kill "$ssh_pid" 2>/dev/null ) &
+watchdog_pid=$!
+wait "$ssh_pid" 2>/dev/null || true
+kill "$watchdog_pid" 2>/dev/null && wait "$watchdog_pid" 2>/dev/null
+probe_fp="$(grep -q 'Permission denied' "$tmpd/err" && ssh-keygen -lf "$tmpd/kh" 2>/dev/null \
+            | awk '{print $2}')"
+rm -rf "$tmpd"
 
 if [ "$probe_fp" = "$HOST_KEY_FP" ]; then
     target="$LAN_IP"; where="home/LAN"
