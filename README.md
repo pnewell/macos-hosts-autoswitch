@@ -40,7 +40,7 @@ There's no single static answer, so this tool makes the one `/etc/hosts` line
 
 - On every network change (and at boot), a root LaunchDaemon runs a small shell
   script.
-- The script probes the configured **LAN IP** with `ssh-keyscan` and compares
+- The script probes the configured **LAN IP** with an SSH handshake and compares
   the host key it gets back to a **pinned fingerprint**.
   - **Match** → you're home → write `LAN_IP  <host>`.
   - **No match / unreachable** → write `REMOTE_IP  <host>`.
@@ -66,7 +66,7 @@ breaks.
 
 - **macOS** (uses `launchd`, `dscacheutil`, `mDNSResponder`).
 - **Root** to install (edits `/etc/hosts` and installs a LaunchDaemon).
-- The host runs **SSH** (only its host key is read; no login happens).
+- The host runs **SSH** (its host key is checked; no login happens).
 - A **stable remote-reachable IP** for the host. Tailscale is the easy path;
   ZeroTier, a WireGuard peer IP, or a static WAN IP + port-forward also work.
   > If you use Tailscale, it must be installed and logged in for the remote IP
@@ -176,7 +176,7 @@ conservative:
   fails, the live file is left **unchanged**.
 - The swap is an **atomic rename** within `/etc`, so there's no window where
   `/etc/hosts` is half-written.
-- The `ssh-keyscan` probe runs with a **hard timeout**, so it can't stall
+- The SSH probe runs with a **hard timeout**, so it can't stall
   network transitions.
 - The worst-case failure mode is "the name points at a stale IP" — recoverable,
   and never something that can break general networking or `localhost`.
